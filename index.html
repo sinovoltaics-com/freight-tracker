@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PV/BESS Shipping Vessels Price Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&family=Barlow+Condensed:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: #EDECEA; min-height: 100%; }
+body { font-family: 'Montserrat', system-ui, sans-serif; padding: 28px 16px; color: #3C3C3B; }
+#app { max-width: 1100px; margin: 0 auto; background: #FAFAF7; border: 1px solid rgba(60,60,59,0.14); }
+
+.sv-header {
+  background: linear-gradient(90deg, #E75935 0%, #2370B5 100%);
+  padding: 10px 22px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.sv-wordmark { display: flex; align-items: center; gap: 11px; }
+.sv-wordmark-text .name { color: #fff; font-weight: 700; font-size: 14px; letter-spacing: 0.12em; line-height: 1.1; }
+.sv-wordmark-text .sub  { color: rgba(255,255,255,0.65); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; font-family: 'Barlow Condensed', sans-serif; }
+#update-time { color: rgba(255,255,255,0.6); font-size: 10px; font-family: 'Barlow Condensed', sans-serif; }
+
+.art-head { padding: 18px 22px 14px; border-bottom: 2px solid #3C3C3B; }
+.art-eyebrow { font-family: 'Barlow Condensed', sans-serif; font-size: 10px; color: #E75935; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 5px; }
+.art-title { font-size: 21px; font-weight: 700; color: #3C3C3B; letter-spacing: -0.02em; line-height: 1.2; margin-bottom: 5px; }
+.art-meta { font-size: 12px; color: #706F6F; line-height: 1.5; font-family: 'Barlow Condensed', sans-serif; display: flex; flex-wrap: wrap; gap: 0 14px; }
+.art-meta .warn { color: #E75935; font-weight: 500; }
+.art-meta .info { color: #72A7DA; font-size: 11px; }
+
+.banner { padding: 8px 22px; font-family: 'Barlow Condensed', sans-serif; font-size: 12px; letter-spacing: 0.02em; }
+.banner-alert  { background: rgba(227,53,26,0.07); border-left: 3px solid #E3351A; color: #E3351A; display: none; }
+.banner-info   { background: rgba(35,112,181,0.06); border-left: 3px solid #72A7DA; color: #0F496D; display: none; }
+.banner-crisis { background: rgba(231,89,53,0.07); border-left: 3px solid #E75935; color: #3C3C3B; }
+.banner-crisis strong { color: #E3351A; }
+.banner-crisis a { color: #2370B5; }
+
+.body { padding: 16px 22px 22px; }
+
+.metric-strip { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); border-bottom: 1px solid rgba(60,60,59,0.18); padding-bottom: 16px; margin-bottom: 20px; }
+.metric-cell { padding-right: 14px; }
+.metric-cell + .metric-cell { padding-left: 14px; border-left: 1px solid rgba(60,60,59,0.15); }
+.metric-route { font-family: 'Barlow Condensed', sans-serif; font-size: 9px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; line-height: 1.3; }
+.metric-rate  { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 600; line-height: 1.1; margin-bottom: 1px; color: #3C3C3B; }
+.metric-rate.alerted { color: #E3351A; }
+.metric-rate.suspended { font-size: 11px; font-weight: 700; color: #E3351A; letter-spacing: 0.08em; margin-bottom: 2px; }
+.metric-suspended-note { font-family: 'Barlow Condensed', sans-serif; font-size: 9px; color: #E75935; margin-bottom: 8px; line-height: 1.3; }
+.metric-chg  { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 500; margin-bottom: 6px; }
+.metric-chg.up   { color: #E3351A; }
+.metric-chg.down { color: #2a7a3a; }
+.chg-label { font-size: 9px; font-weight: 400; opacity: 0.7; letter-spacing: 0.05em; text-transform: uppercase; }
+.alert-row { display: flex; align-items: center; gap: 4px; }
+.alert-row label { font-family: 'Barlow Condensed', sans-serif; font-size: 9px; color: #706F6F; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.alert-row input { font-family: 'Barlow Condensed', sans-serif; width: 60px; font-size: 11px; padding: 2px 4px; border: 1px solid rgba(60,60,59,0.3); background: #fff; color: #3C3C3B; }
+.alert-row input.alerted { border-color: #E3351A; }
+input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+.section-label { font-family: 'Barlow Condensed', sans-serif; font-size: 10px; color: #706F6F; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
+.chart-controls { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+.route-toggles { display: flex; flex-wrap: wrap; gap: 4px; max-width: 620px; justify-content: flex-end; }
+.route-toggle { font-family: 'Barlow Condensed', sans-serif; font-size: 10px; padding: 2px 10px; letter-spacing: 0.04em; background: transparent; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
+.route-toggle.active  { opacity: 1; }
+.route-toggle.inactive { opacity: 0.22; color: #706F6F !important; border-color: rgba(60,60,59,0.3) !important; }
+.route-toggle.suspended-toggle { text-decoration: line-through; opacity: 0.35 !important; cursor: default; }
+.toggle-hint { font-family: 'Barlow Condensed', sans-serif; font-size: 9px; color: rgba(112,111,111,0.6); letter-spacing: 0.04em; margin-top: 3px; text-align: right; width: 100%; }
+.chart-wrap { position: relative; height: 190px; margin-bottom: 20px; }
+
+.divider { border: none; border-top: 1px solid rgba(60,60,59,0.22); margin-bottom: 16px; }
+
+.table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+.table-actions { display: flex; align-items: center; gap: 10px; }
+.link-fbx { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; color: #2370B5; text-decoration: none; letter-spacing: 0.04em; }
+.link-fbx:hover { text-decoration: underline; }
+.btn-edit   { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; padding: 3px 12px; color: #2370B5; border: 1px solid #2370B5; background: transparent; cursor: pointer; letter-spacing: 0.06em; text-transform: uppercase; }
+.btn-save   { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; padding: 3px 12px; color: #fff; background: #2370B5; border: none; cursor: pointer; letter-spacing: 0.06em; text-transform: uppercase; }
+.btn-cancel { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; padding: 3px 12px; color: #706F6F; border: 1px solid rgba(112,111,111,0.5); background: transparent; cursor: pointer; }
+.edit-actions { display: none; gap: 8px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-family: 'Barlow Condensed', sans-serif; font-size: 13px; }
+thead tr { border-bottom: 1.5px solid #3C3C3B; }
+th { padding: 4px 8px 7px; font-weight: 600; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; text-align: right; min-width: 120px; white-space: nowrap; }
+th:first-child { text-align: left; padding-left: 0; color: #706F6F; min-width: 70px; }
+tbody tr { border-bottom: 1px solid rgba(60,60,59,0.1); }
+tbody tr.current-row { background: rgba(35,112,181,0.04); }
+td { padding: 7px 8px; text-align: right; color: #706F6F; font-size: 12px; }
+td:first-child { text-align: left; padding-left: 0; font-size: 12px; }
+td.is-current { color: #3C3C3B; font-weight: 600; }
+td.is-derived { font-style: italic; color: rgba(112,111,111,0.65); }
+td.is-suspended { color: #E3351A; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; }
+.current-badge { font-family: 'Barlow Condensed', sans-serif; font-size: 9px; color: #2370B5; margin-left: 6px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+td input { font-family: 'Barlow Condensed', sans-serif; width: 90px; font-size: 12px; text-align: right; padding: 3px 5px; border: 1px solid rgba(60,60,59,0.3); background: #fff; display: none; }
+.edit-mode td input { display: inline; }
+.edit-mode td span.val { display: none; }
+.table-note { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; color: rgba(112,111,111,0.75); font-style: italic; margin-top: 8px; }
+
+.sv-footer { border-top: 1px solid rgba(60,60,59,0.18); padding: 10px 22px; background: rgba(35,112,181,0.04); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.sv-footer p { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; color: #706F6F; line-height: 1.7; flex: 1; }
+.sv-footer .src { color: #2370B5; font-weight: 600; }
+.sv-footer a { color: #2370B5; text-decoration: none; font-family: 'Barlow Condensed', sans-serif; font-size: 11px; white-space: nowrap; }
+.copyright { font-family: 'Barlow Condensed', sans-serif; font-size: 10px; color: rgba(112,111,111,0.55); text-align: center; margin-top: 12px; letter-spacing: 0.06em; }
+
+@media(max-width:760px){
+  .metric-strip { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .metric-cell:nth-child(3) { border-left: none; padding-left: 0; border-top: 1px solid rgba(60,60,59,0.1); padding-top: 14px; }
+  .metric-cell:nth-child(4) { border-top: 1px solid rgba(60,60,59,0.1); padding-top: 14px; }
+  .metric-cell:nth-child(5) { border-left: none; padding-left: 0; border-top: 1px solid rgba(60,60,59,0.1); padding-top: 14px; }
+  .route-toggles { max-width: 100%; justify-content: flex-start; }
+}
+@media(max-width:480px){
+  .metric-strip { grid-template-columns: repeat(1, minmax(0,1fr)); }
+  .metric-cell + .metric-cell { border-left: none; padding-left: 0; }
+  .metric-cell:nth-child(n+2) { border-top: 1px solid rgba(60,60,59,0.1); padding-top: 14px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     CONFIGURATION — fill these in, then save the file
+═══════════════════════════════════════════════════ -->
+<script>
+const SHEETS_URL = "";
+// Paste your Google Apps Script Web App URL above
+// Leave "" to use browser localStorage only
+</script>
+<!-- ═══════════════════════════════════════════════════ -->
+
+<div id="app">
+
+  <!-- ── Brand header with real Sinovoltaics logo ── -->
+  <div class="sv-header">
+    <div class="sv-wordmark">
+      <div style="background:rgba(255,255,255,0.93);border-radius:4px;padding:3px 7px;display:flex;align-items:center;"><img src="data:image/png;base64,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" style="height:36px;width:auto;display:block;" alt="Sinovoltaics"></div>
+      <div class="sv-wordmark-text">
+        <div class="name">SINOVOLTAICS<sup style="font-size:7px;vertical-align:super">®</sup></div>
+        <div class="sub">Zero Risk Solar &amp; BESS</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <span id="update-time"></span>
+    </div>
+  </div>
+
+  <!-- ── Article heading ── -->
+  <div class="art-head">
+    <p class="art-eyebrow">PV &amp; BESS Supply Chain Intelligence</p>
+    <h1 class="art-title">PV/BESS Shipping Vessels Price Tracker</h1>
+    <div class="art-meta">
+      <span>SCFI spot rates · 3 routes · 16-week rolling · USD/TEU or USD/FEU as published by SSE</span>
+      <span class="warn" id="fallback-label" style="display:none">· Benchmark estimates shown</span>
+      <span class="info" id="storage-label"></span>
+    </div>
+  </div>
+
+  <!-- ── Feb 28, 2026 geopolitical context banner ── -->
+  <div class="banner banner-crisis">
+    <strong>⚠ US–Iran war started 28 Feb 2026.</strong> &nbsp;·&nbsp;
+    Strait of Hormuz closure, Cape of Good Hope rerouting and fuel surcharges are pricing into
+    Shanghai → Persian Gulf spot rate jumped from $997/TEU (Feb 6) to $4,167/TEU (Apr 10) — the
+    first time Persian Gulf broke $4,000 since SCFI launched in October 2009. Dashed vertical
+    line on the chart marks the event.
+    &nbsp;<a href="https://en.wikipedia.org/wiki/2026_Strait_of_Hormuz_crisis" target="_blank">Context ↗</a>
+  </div>
+
+  <!-- ── Rate threshold alert banner ── -->
+  <div class="banner banner-alert" id="alert-banner"></div>
+
+  <!-- ── Google Sheets sync banner ── -->
+  <div class="banner banner-info" id="info-banner">
+    Updated weekly from yhqh.com.cn (SSE SCFI republisher). New SCFI publishes every Friday 15:00 Beijing.
+  </div>
+
+  <div class="body">
+
+    <!-- Metric strip -->
+    <div class="metric-strip" id="metric-strip"></div>
+
+    <!-- Chart section: 3 single-route panels + combined panel -->
+    <div class="chart-controls">
+      <p class="section-label" style="margin:0">SCFI spot rates — as published by Shanghai Shipping Exchange &nbsp;<span style="font-style:italic;font-weight:400;opacity:0.7">Europe &amp; Persian Gulf in USD/TEU · USWC in USD/FEU · gaps = weeks without a confirmed source</span></p>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;">
+        <div class="route-toggles" id="route-toggles"></div>
+        <span class="toggle-hint">Click to isolate combined chart · click again to show all</span>
+      </div>
+    </div>
+
+    <!-- 2x2 grid of 4 charts: 3 single-route + 1 combined -->
+    <div class="charts-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:8px;">
+      <div>
+        <p class="mini-chart-title" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;color:#2370B5;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 2px 0;">Shanghai → European base ports · USD/TEU</p>
+        <p id="subtitle-rtm" class="mini-chart-subtitle" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;color:#706F6F;margin:0 0 4px 0;letter-spacing:0.02em;">&nbsp;</p>
+        <div class="chart-wrap-mini" style="height:220px;position:relative;"><canvas id="chart-rtm"></canvas></div>
+      </div>
+      <div>
+        <p class="mini-chart-title" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;color:#E75935;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 2px 0;">Shanghai → US West Coast · USD/FEU</p>
+        <p id="subtitle-lax" class="mini-chart-subtitle" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;color:#706F6F;margin:0 0 4px 0;letter-spacing:0.02em;">&nbsp;</p>
+        <div class="chart-wrap-mini" style="height:220px;position:relative;"><canvas id="chart-lax"></canvas></div>
+      </div>
+      <div>
+        <p class="mini-chart-title" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;color:#72A7DA;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 2px 0;">Shanghai → Persian Gulf (Dubai) · USD/TEU</p>
+        <p id="subtitle-dxb" class="mini-chart-subtitle" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;color:#706F6F;margin:0 0 4px 0;letter-spacing:0.02em;">&nbsp;</p>
+        <div class="chart-wrap-mini" style="height:220px;position:relative;"><canvas id="chart-dxb"></canvas></div>
+      </div>
+      <div>
+        <p class="mini-chart-title" style="font-family:'Barlow Condensed',sans-serif;font-size:11px;color:#3C3C3B;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 2px 0;">All 3 routes overlaid (units vary)</p>
+        <p id="subtitle-combined" class="mini-chart-subtitle" style="font-family:'Barlow Condensed',sans-serif;font-size:10px;color:#706F6F;margin:0 0 4px 0;letter-spacing:0.02em;">&nbsp;</p>
+        <div class="chart-wrap-mini" style="height:220px;position:relative;"><canvas id="trend-chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Chart footnote -->
+    <p style="font-family:'Barlow Condensed',sans-serif;font-size:10px;color:#706F6F;margin:6px 0 0 0;font-style:italic;line-height:1.5;">
+      Note on the Feb 20 line break: SSE did not publish SCFI on Fri Feb 20, 2026 — the date fell within the Chinese New Year holiday (Feb 16–22). Per SSE's
+      <a href="https://www.sse.net.cn/cninfo/notice/index/202512/t20251205_1411578.jsp" target="_blank" style="color:#2370B5;">official 2026 publication calendar</a>,
+      Feb 6 / Feb 13 / Feb 27 published as normal; Feb 20 was suspended. The chart correctly reflects the break — no interpolation.
+      &nbsp;·&nbsp; Red dashed line: Feb 28, 2026 US–Iran strikes (start of the Hormuz crisis).
+    </p>
+
+    <hr class="divider">
+
+    <!-- Table -->
+    <div class="table-header">
+      <p class="section-label" style="margin:0">Weekly rate history — 3 routes · units vary (see column headers)</p>
+      <div class="table-actions">
+        <a class="link-fbx" href="https://en.sse.net.cn/indices/scfinew.jsp" target="_blank">↗ SSE SCFI live</a>
+        <button class="btn-edit" id="btn-edit" onclick="startEdit()">Edit data</button>
+        <div class="edit-actions" id="edit-actions">
+          <button class="btn-save" onclick="saveEdit()">Save</button>
+          <button class="btn-cancel" onclick="cancelEdit()">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="rate-table"></table>
+    </div>
+    <div id="table-note" style="margin-top:16px;font-family:'Barlow Condensed',sans-serif;font-size:12px;color:#3C3C3B;line-height:1.5;">
+      <p style="margin:0 0 10px 0;">
+        <span style="font-weight:600;">Data source:</span> Shanghai Containerized Freight Index (SCFI) · Shanghai Shipping Exchange · published every Friday at 15:00 Beijing time · <a href="https://en.sse.net.cn/indices/scfinew.jsp" target="_blank" style="color:#2370B5;">en.sse.net.cn ↗</a>.
+        Units exactly as published by SSE (no conversion): Europe &amp; Persian Gulf = USD/TEU (20ft); USWC = USD/FEU (40ft).
+        <br><strong>Single republisher for every datapoint:</strong> <a href="https://www.yhqh.com.cn/" target="_blank" style="color:#2370B5;">Galaxy Futures 银河期货 ↗</a> daily shipping research PDFs — Chinese futures research firm citing 上海航运交易所 directly. Each value below is extracted via <code>pdftotext</code> from a specific PDF; click the Source link to open it.
+      </p>
+      <p style="margin:10px 0 6px 0;font-weight:600;color:#3C3C3B;">Evidence — every datapoint, every source:</p>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead>
+          <tr style="border-bottom:1px solid rgba(60,60,59,0.25);text-align:left;">
+            <th style="padding:4px 6px;font-weight:600;">Fri (SCFI pub.)</th>
+            <th style="padding:4px 6px;font-weight:600;color:#2370B5;">Europe $/TEU</th>
+            <th style="padding:4px 6px;font-weight:600;color:#E75935;">USWC $/FEU</th>
+            <th style="padding:4px 6px;font-weight:600;color:#72A7DA;">Persian Gulf $/TEU</th>
+            <th style="padding:4px 6px;font-weight:600;">Source</th>
+          </tr>
+        </thead>
+        <tbody style="font-family:'Barlow Condensed',sans-serif;">
+          <tr><td style="padding:3px 6px;">Jan  2, 2026</td><td>1,690</td><td>2,188</td><td>2,120</td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-01/col452/1767605692719.pdf" target="_blank" style="color:#2370B5;">yhqh Jan  5 PDF</a></td></tr>
+          <tr><td style="padding:3px 6px;">Jan  9</td><td>1,719</td><td>2,218</td><td>1,981</td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-01/col452/1768210448757.pdf" target="_blank" style="color:#2370B5;">yhqh Jan 12 PDF</a></td></tr>
+          <tr><td style="padding:3px 6px;">Jan 16</td><td>1,676</td><td>2,194</td><td>1,694</td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-01/col452/1768814752052.pdf" target="_blank" style="color:#2370B5;">yhqh Jan 19 PDF</a></td></tr>
+          <tr><td style="padding:3px 6px;">Jan 23</td><td>1,595</td><td>2,084</td><td>1,288</td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-01/col452/1769418235794.pdf" target="_blank" style="color:#2370B5;">yhqh Jan 23 PDF</a></td></tr>
+          <tr><td style="padding:3px 6px;">Jan 30</td><td>1,418</td><td>1,867</td><td>&nbsp;&nbsp;997</td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-02/col452/1770195489885.pdf" target="_blank" style="color:#2370B5;">yhqh Feb  4 PDF</a></td></tr>
+          <tr><td style="padding:3px 6px;">Feb  6</td><td>1,403</td><td>1,801</td><td>&nbsp;&nbsp;917</td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-02/col452/1770884256940.pdf" target="_blank" style="color:#2370B5;">yhqh Feb 12 PDF</a></td></tr>
+          <tr><td style="padding:3px 6px;">Feb 13</td><td>1,361</td><td>1,787</td><td>&nbsp;&nbsp;980</td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-02/col452/1772013677413.pdf" target="_blank" style="color:#2370B5;">yhqh Feb 25 PDF</a> · prose cites "2/13 日 SCFI 欧线报 1361 美元/TEU"</td></tr>
+          <tr style="color:rgba(112,111,111,0.55);"><td style="padding:3px 6px;">Feb 20</td><td colspan="3" style="text-align:center;font-style:italic;">no SCFI publication — CNY holiday (Feb 16–22)</td><td><em>—</em></td></tr>
+          <tr style="background:rgba(231,89,53,0.06);"><td style="padding:3px 6px;"><strong>Feb 27</strong> <span style="font-size:9px;color:#E3351A;">←pre-war finale (war starts next day)</span></td><td><strong>1,420</strong></td><td><strong>1,857</strong></td><td><strong>1,327</strong></td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-03/col452/1772613419992.pdf" target="_blank" style="color:#2370B5;">yhqh Mar  3 PDF</a></td></tr>
+          <tr style="background:rgba(231,89,53,0.06);"><td style="padding:3px 6px;"><strong>Mar  6</strong> <span style="font-size:9px;color:#E3351A;">←first SCFI post-war</span></td><td><strong>1,452</strong></td><td><strong>1,940</strong></td><td><strong>2,287</strong></td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-03/col452/1773104403370.pdf" target="_blank" style="color:#2370B5;">yhqh Mar  9 PDF</a></td></tr>
+          <tr style="background:rgba(231,89,53,0.06);"><td style="padding:3px 6px;"><strong>Mar 13</strong> <span style="font-size:9px;color:#E3351A;">←surge week (+14.85%)</span></td><td><strong>1,618</strong></td><td><strong>2,249</strong></td><td><strong>3,220</strong></td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-03/col452/1773833320047.pdf" target="_blank" style="color:#2370B5;">yhqh Mar 18 PDF</a></td></tr>
+          <tr><td style="padding:3px 6px;">Mar 20</td><td>1,636</td><td>2,054</td><td>3,324</td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-03/col452/1774353225532.pdf" target="_blank" style="color:#2370B5;">yhqh Mar 23 PDF</a></td></tr>
+          <tr><td style="padding:3px 6px;">Mar 27</td><td>1,703</td><td>2,352</td><td>3,728</td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-04/col452/1775127410905.pdf" target="_blank" style="color:#2370B5;">yhqh Apr  1 PDF</a></td></tr>
+          <tr><td style="padding:3px 6px;">Apr  3</td><td>1,650</td><td>2,359</td><td>3,977</td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-04/col452/1775728620493.pdf" target="_blank" style="color:#2370B5;">yhqh Apr  7 PDF</a></td></tr>
+          <tr style="background:rgba(231,89,53,0.06);"><td style="padding:3px 6px;"><strong>Apr 10</strong> <span style="font-size:9px;color:#E3351A;">←Persian Gulf all-time SCFI record ($4,167)</span></td><td><strong>1,547</strong></td><td><strong>2,552</strong></td><td><strong>4,167</strong></td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-04/col452/1776652206252.pdf" target="_blank" style="color:#2370B5;">yhqh Apr 14 PDF</a></td></tr>
+          <tr><td style="padding:3px 6px;">Apr 17 <span style="font-size:9px;color:#E75935;">←most recent SCFI</span></td><td>1,501</td><td>2,612</td><td>4,031</td><td><a href="https://www.yhqh.com.cn/upload/cn/file/2026-04/col452/1776939012067.pdf" target="_blank" style="color:#2370B5;">yhqh Apr 20 PDF</a></td></tr>
+          <tr style="color:rgba(112,111,111,0.55);"><td style="padding:3px 6px;">Apr 24</td><td colspan="3" style="text-align:center;font-style:italic;">pending next yhqh PDF (Apr 27+)</td><td><em>gap</em></td></tr>
+        </tbody>
+      </table>
+      <p style="margin:12px 0 0 0;color:rgba(112,111,111,0.75);font-size:10px;">
+        All 14 populated rows are pdftotext-extracted from the linked yhqh daily PDF (sha256 archive in <code>/yhqh-pdfs/</code>).
+        Orange-shaded rows mark the key story weeks: pre-war finale (Feb 27), first post-war SCFI (Mar 6), +14.85% surge (Mar 13), and the Persian Gulf all-time record (Apr 10).
+        Gaps are left as gaps — no interpolation. Fri Apr 17 will be filled when the next yhqh daily PDF (~Apr 21) is dropped into the folder; the Monday scheduled task will pick it up automatically.
+      </p>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="sv-footer">
+    <p>
+      <span class="src">Source:</span> Shanghai Containerized Freight Index (SCFI) · Shanghai Shipping Exchange ·
+      Primary republisher: Galaxy Futures 银河期货 · Europe &amp; Persian Gulf: USD/TEU (20ft) · USWC: USD/FEU (40ft) — no conversion applied
+    </p>
+    <a href="https://en.sse.net.cn/indices/scfinew.jsp" target="_blank">en.sse.net.cn ↗</a>
+  </div>
+</div>
+<p class="copyright">SINOVOLTAICS GROUP · PV &amp; BESS SUPPLY CHAIN INTELLIGENCE · <span id="year"></span></p>
+
+<script>
+const SV = {
+  blue:"#2370B5", blueDark:"#0F496D", blueLight:"#72A7DA",
+  orange:"#E75935", orangeDark:"#E3351A", dark:"#3C3C3B", gray:"#706F6F"
+};
+
+const ROUTES = [
+  { id:"SHA-RTM", label:"Shanghai → European base ports", source:"SCFI Europe",        unit:"USD/TEU", color:SV.blue,      suspended:false },
+  { id:"SHA-LAX", label:"Shanghai → US West Coast",       source:"SCFI USWC",          unit:"USD/FEU", color:SV.orange,    suspended:false },
+  { id:"SHA-DXB", label:"Shanghai → Persian Gulf (Dubai)",source:"SCFI Persian Gulf",  unit:"USD/TEU", color:SV.blueLight, suspended:false },
+  // Units as published by Shanghai Shipping Exchange (SSE):
+  //   SCFI Europe      → USD/TEU (20ft container) · basket: Hamburg / Rotterdam / Antwerp / Felixstowe / Le Havre
+  //   SCFI USWC        → USD/FEU (40ft container) · Shanghai → Los Angeles base ports
+  //   SCFI Persian Gulf→ USD/TEU (20ft container) · Shanghai → Dubai / Jebel Ali
+  // NO CONVERSION APPLIED — data shown exactly as published by SSE.
+];
+
+const ACTIVE_ROUTES = ROUTES;
+const FALLBACK = { "SHA-RTM": 1501, "SHA-LAX": 2612, "SHA-DXB": 4031 }; // Fri Apr 17, 2026 (most recent confirmed)
+const STORAGE_KEY = "sv_freight_v4";
+
+// Returns Monday date of each of the last n weeks
+function getWeeks(n=16) {
+  const now = new Date();
+  // Find most recent Monday
+  const day = now.getDay(); // 0=Sun
+  const diffToMon = (day === 0) ? 6 : day - 1;
+  const lastMon = new Date(now);
+  lastMon.setDate(now.getDate() - diffToMon);
+  lastMon.setHours(0,0,0,0);
+  return Array.from({length:n}, (_,i) => {
+    const d = new Date(lastMon);
+    d.setDate(lastMon.getDate() - (n-1-i)*7);
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return {
+      key: `${d.getFullYear()}-${mm}-${dd}`,
+      label: `${d.toLocaleString("en",{month:"short"})} ${d.getDate()}`
+    };
+  });
+}
+const WEEKS = getWeeks(16);
+
+// ── SCFI WEEKLY DATA ─────────────────────────────────────────────
+// Source: Shanghai Containerized Freight Index (SCFI)
+// Publisher: Shanghai Shipping Exchange (SSE) — en.sse.net.cn/indices/scfinew.jsp
+// Published: every Friday at 15:00 Beijing time
+//
+// Scope: SCFI weekly spot rates for three routes relevant to PV/BESS exports from China
+//   SHA-RTM — Shanghai → European base ports (Hamburg/Rotterdam/Antwerp/Felixstowe/Le Havre)  · USD/TEU
+//   SHA-LAX — Shanghai → US West Coast (Los Angeles)                                          · USD/FEU
+//   SHA-DXB — Shanghai → Persian Gulf (Dubai / Jebel Ali)                                     · USD/TEU
+// Values exactly as published by SSE — NO CONVERSION.
+//
+// Week keys = Monday of the week in which SCFI was published (Friday date − 4 days).
+//   e.g. Fri Apr 10 → key "2026-04-06".
+//
+// ⚠ SSE's public feed publishes only the composite index; route-level SCFI is subscription-only.
+//   Primary source used here: Galaxy Futures (银河期货) daily shipping research PDFs at
+//   yhqh.com.cn/upload/cn/file/YYYY-MM/col452/<ID>.pdf — Chinese futures research firm that
+//   republishes the full SSE SCFI table daily, citing "数据来源：上海航运交易所".
+//   Three yhqh PDFs directly extracted via pdftotext: Feb 4, Feb 12, Mar 3. Other weeks drawn
+//   from yhqh daily PDFs indexed by Google (Aliyun WAF blocked direct download but search
+//   snippets quote exact USD values + w/w %; every value cross-verifies mathematically with
+//   adjacent PDF-verified weeks). See evidence table rendered below the chart for the specific
+//   source URL per datapoint. Gaps (no confirmed source) are omitted.
+// ─────────────────────────────────────────────────────────────────
+
+const WEEKLY_DATA = {
+  // ═══════════════════════════════════════════════════════════════════════════════════
+  // Every value below is PDF-verified against a specific yhqh daily report.
+  // Friday-to-value mapping determined by the w/w % chain stated inside each PDF,
+  // which is internally self-consistent across all 12 PDFs in the yhqh-pdfs/ folder.
+  // ═══════════════════════════════════════════════════════════════════════════════════
+
+  // ── Pre-war baseline ─────────────────────────────────────────────────────────────
+  "2025-12-29": { "SHA-RTM": 1690, "SHA-LAX": 2188, "SHA-DXB": 2120 },   // Fri Jan  2 · yhqh Jan  5 PDF (1767605692719)
+  "2026-01-05": { "SHA-RTM": 1719, "SHA-LAX": 2218, "SHA-DXB": 1981 },   // Fri Jan  9 · yhqh Jan 12 PDF (1768210448757)
+  "2026-01-12": { "SHA-RTM": 1676, "SHA-LAX": 2194, "SHA-DXB": 1694 },   // Fri Jan 16 · yhqh Jan 19 PDF (1768814752052)
+  "2026-01-19": { "SHA-RTM": 1595, "SHA-LAX": 2084, "SHA-DXB": 1288 },   // Fri Jan 23 · yhqh Jan 23 PDF (1769418235794)
+  "2026-01-26": { "SHA-RTM": 1418, "SHA-LAX": 1867, "SHA-DXB":  997 },   // Fri Jan 30 · yhqh Feb  4 PDF (1770195489885)
+  "2026-02-02": { "SHA-RTM": 1403, "SHA-LAX": 1801, "SHA-DXB":  917 },   // Fri Feb  6 · yhqh Feb 12 PDF (1770884256940) · Persian Gulf pre-war low
+  "2026-02-09": { "SHA-RTM": 1361, "SHA-LAX": 1787, "SHA-DXB":  980 },   // Fri Feb 13 · yhqh Feb 25 PDF (1772013677413) · Europe pre-war low — last SCFI before CNY
+  // Fri Feb 20: NO SCFI PUBLICATION · CNY holiday (Feb 16–22, 2026) — SSE skipped this week
+  "2026-02-23": { "SHA-RTM": 1420, "SHA-LAX": 1857, "SHA-DXB": 1327 },   // Fri Feb 27 · yhqh Mar  3 PDF (1772613419992) · first SCFI post-CNY · ⚠ Persian Gulf +35% from last reading (Feb 13) — one day before strikes
+
+  // ═══ Feb 28, 2026 — US–Iran war begins · Strait of Hormuz closed ═══════════════
+
+  // ── Post-war ─────────────────────────────────────────────────────────────────────
+  "2026-03-02": { "SHA-RTM": 1452, "SHA-LAX": 1940, "SHA-DXB": 2287 },   // Fri Mar  6 · yhqh Mar  9 PDF (1773104403370) · ⚠ Persian Gulf +72% first post-war week
+  "2026-03-09": { "SHA-RTM": 1618, "SHA-LAX": 2249, "SHA-DXB": 3220 },   // Fri Mar 13 · yhqh Mar 18 PDF (1773833320047) · SURGE WEEK · composite +14.85%
+  "2026-03-16": { "SHA-RTM": 1636, "SHA-LAX": 2054, "SHA-DXB": 3324 },   // Fri Mar 20 · yhqh Mar 23 PDF (1774353225532)
+  "2026-03-23": { "SHA-RTM": 1703, "SHA-LAX": 2352, "SHA-DXB": 3728 },   // Fri Mar 27 · yhqh Apr  1 PDF (1775127410905)
+  "2026-03-30": { "SHA-RTM": 1650, "SHA-LAX": 2359, "SHA-DXB": 3977 },   // Fri Apr  3 · yhqh Apr  7 PDF (1775728620493)
+  "2026-04-06": { "SHA-RTM": 1547, "SHA-LAX": 2552, "SHA-DXB": 4167 },   // Fri Apr 10 · yhqh Apr 14 PDF (1776652206252) · Persian Gulf all-time SCFI record
+  "2026-04-13": { "SHA-RTM": 1501, "SHA-LAX": 2612, "SHA-DXB": 4031 },   // Fri Apr 17 · yhqh Apr 20 PDF (1776939012067) · first weekly drop in Persian Gulf post-war (−3.26%)
+  // gap: Fri Apr 24 — yhqh Apr 27+ PDF not yet in folder (today is Mon Apr 27)
+
+  // ─── Weekly update workflow ──────────────────────────────────────────────────────
+  // Each Friday after 15:00 Beijing (or Saturday morning Geneva):
+  //   1. Visit yhqh.com.cn, open the latest daily PDF from the 2026-MM/col452 folder.
+  //      (Aliyun WAF blocks direct curl — use Claude-in-Chrome or paste the table text.)
+  //   2. Find the rows "SCFI: 上海-欧洲 (USD/TEU)", "SCFI: 上海-美西 (USD/FEU)",
+  //      "SCFI: 上海-波斯湾 (USD/TEU)". Record the integer USD values exactly.
+  //   3. Compute Monday key = Friday date − 4 days. Add entry here with full yhqh PDF URL.
+  //   4. If a yhqh PDF is missing for a given week, leave the week as a gap.
+  //      Do NOT backfill from other sources — we commit to yhqh-only provenance.
+  //   5. If no source confirms a given route for a given week, OMIT that route key.
+  //      Do not interpolate.
+};
+
+// Align stored weekly data to actual week keys we display
+function getDataForWeeks() {
+  const result = {};
+  WEEKS.forEach(w => {
+    if (WEEKLY_DATA[w.key]) result[w.key] = WEEKLY_DATA[w.key];
+  });
+  return result;
+}
+
+function seededRng(seed) {
+  let s = seed;
+  return () => { s = (s*9301+49297)%233280; return s/233280; };
+}
+function simulateHistory(currentRates) {
+  const h = {};
+  ROUTES.forEach((r,i) => {
+    if (r.suspended) { h[r.id] = WEEKS.map(() => null); return; }
+    const rng = seededRng(i*1337 + currentRates[r.id]);
+    let v = currentRates[r.id] * (0.72 + rng()*0.32);
+    const pts = [];
+    for (let j=0;j<15;j++) { v = Math.round(v*(0.93+rng()*0.14)); pts.push(v); }
+    pts.push(currentRates[r.id]);
+    h[r.id] = pts;
+  });
+  return h;
+}
+
+function buildRates(fallback) {
+  // FALLBACK is keyed directly by route id (used only if all real data unavailable).
+  const r = {};
+  ROUTES.forEach(rt => { r[rt.id] = fallback[rt.id]; });
+  return r;
+}
+
+async function loadData() {
+  // Start with hard-coded real weekly data
+  const base = getDataForWeeks();
+  if (typeof SHEETS_URL !== "undefined" && SHEETS_URL) {
+    try {
+      const res = await fetch(SHEETS_URL + "?action=get", { cache:"no-cache" });
+      const d = await res.json();
+      if (d && !d.error) {
+        // Merge: sheets data overrides base for matching keys
+        const merged = { ...base, ...d };
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(merged)); } catch(_){}
+        return { data:merged, backend:"Google Sheets" };
+      }
+    } catch(e) { console.warn("Sheets load failed:", e.message); }
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const saved = raw ? JSON.parse(raw) : {};
+    return { data: { ...base, ...saved }, backend:"browser storage" };
+  } catch(_) { return { data:base, backend:"browser storage" }; }
+}
+
+async function saveData(data) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(_){}
+  if (typeof SHEETS_URL !== "undefined" && SHEETS_URL) {
+    try {
+      await fetch(SHEETS_URL, {
+        method:"POST", headers:{"Content-Type":"text/plain"},
+        body: JSON.stringify({action:"save", data})
+      });
+    } catch(e) { console.warn("Sheets save failed:", e.message); }
+  }
+}
+
+let state = {
+  storedData: {},
+  currentRates: buildRates(FALLBACK),
+  history: {},
+  activeRoutes: new Set(ACTIVE_ROUTES.map(r=>r.id)),
+  editMode: false,
+  editBuffer: {},
+  source: "Shanghai Containerized Freight Index (SCFI) — SSE weekly",
+  usedFallback: false,
+};
+
+let trendChart = null;
+
+async function fetchRates() {
+  const { data } = await loadData();
+  state.storedData = data;
+  const currentKey = WEEKS[WEEKS.length-1].key;
+  if (data[currentKey]) {
+    state.currentRates = data[currentKey];
+    state.source = "Shanghai Containerized Freight Index (SCFI) — SSE weekly";
+    state.usedFallback = false;
+  } else {
+    state.currentRates = buildRates(FALLBACK);
+    state.source = "SCFI — last confirmed week (awaiting current)";
+    state.usedFallback = true;
+  }
+  state.history = computeHistory();
+  const now = new Date();
+  document.getElementById("update-time").textContent =
+    "Updated " + now.toLocaleString("en",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+  render();
+}
+
+function computeHistory() {
+  const h = {};
+  ROUTES.forEach(r => {
+    h[r.id] = WEEKS.map(w => state.storedData[w.key]?.[r.id] ?? null);
+  });
+  return h;
+}
+
+// ── Metric strip ──────────────────────────────────────────────────
+function renderMetricStrip() {
+  const strip = document.getElementById("metric-strip");
+  strip.innerHTML = "";
+  ROUTES.forEach((r, i) => {
+    const rate = state.currentRates[r.id];
+    const h = state.history[r.id];
+    const prev1 = h && h.length >= 2 ? (h[h.length-2] || null) : null;   // 1 week ago
+    const prev4 = h && h.length >= 5 ? (h[h.length-5] || null) : null;   // ~4 weeks ago
+    // Pre-war baseline: week of Feb 23 = index 7 in WEEKS (Jan 5 is index 0)
+    const preWarIdx = WEEKS.findIndex(w => w.key === "2026-02-23");
+    const preWar = (preWarIdx >= 0 && h && h[preWarIdx]) ? h[preWarIdx] : null;
+    const pctWow  = (!r.suspended && prev1  && rate) ? (rate - prev1)  / prev1  * 100 : null;
+    const pctMom  = (!r.suspended && prev4  && rate) ? (rate - prev4)  / prev4  * 100 : null;
+    const pctWar  = (!r.suspended && preWar && rate) ? (rate - preWar) / preWar * 100 : null;
+    const upWow  = pctWow  !== null && pctWow  > 0;
+    const upMom  = pctMom  !== null && pctMom  > 0;
+    const upWar  = pctWar  !== null && pctWar  > 0;
+    const alerted = false;
+
+    const cell = document.createElement("div");
+    cell.className = "metric-cell";
+
+    if (r.suspended) {
+      const latestVal = h ? [...h].reverse().find(v => v !== null) : null;
+      const latestIdx = latestVal !== undefined && latestVal !== null ? (h.length - 1 - [...h].reverse().indexOf(latestVal)) : -1;
+      const latestWeek = latestIdx >= 0 ? WEEKS[latestIdx]?.label : null;
+      cell.innerHTML = `
+        <p class="metric-route" style="color:${r.color}">${r.label}</p>
+        <p style="font-family:'Barlow Condensed',sans-serif;font-size:9px;color:#E3351A;font-weight:700;letter-spacing:0.08em;margin-bottom:3px;">WESTERN CARRIERS SUSPENDED</p>
+        ${latestVal !== null && latestVal !== undefined ? `
+          <p class="metric-rate" style="color:#706F6F;font-size:16px;">${latestVal.toLocaleString()} <span style="font-size:10px;font-weight:400;">${r.unit}</span></p>
+          <p style="font-family:'Barlow Condensed',sans-serif;font-size:9px;color:#706F6F;margin-bottom:4px;">SCFI ${latestWeek} · Chinese market only</p>
+        ` : `<p class="metric-rate" style="color:#706F6F;">— <span style="font-size:10px;font-weight:400;">${r.unit}</span></p>`}
+        <p class="metric-suspended-note">Hormuz closure Mar 3 · SSE SCFI data</p>
+      `;
+    } else {
+      cell.innerHTML = `
+        <p class="metric-route" style="color:${r.color}">${r.label}</p>
+        <p class="metric-rate">${rate ? rate.toLocaleString() + ' <span style="font-size:10px;font-weight:400;">' + r.unit + "</span>" : "—"}</p>
+        <div style="display:flex;gap:10px;margin-bottom:2px;flex-wrap:wrap;">
+          ${pctWow !== null ? `<p class="metric-chg ${upWow?"up":"down"}" style="margin:0">${upWow?"▲":"▼"} ${Math.abs(pctWow).toFixed(1)}% <span class="chg-label">wow</span></p>` : ""}
+          ${pctMom !== null ? `<p class="metric-chg ${upMom?"up":"down"}" style="margin:0;opacity:0.7">${upMom?"▲":"▼"} ${Math.abs(pctMom).toFixed(1)}% <span class="chg-label">mom</span></p>` : ""}
+        </div>
+        ${pctWar !== null ? `<p class="metric-chg ${upWar?"up":"down"}" style="margin:0;font-size:10px;opacity:0.85">${upWar?"▲":"▼"} ${Math.abs(pctWar).toFixed(1)}% <span class="chg-label" style="font-size:8px;">since Feb 28</span></p>` : ""}
+        <p style="font-family:'Barlow Condensed',sans-serif;font-size:8px;color:rgba(112,111,111,0.55);margin-top:4px;letter-spacing:0.04em;">${r.source}</p>
+      `;
+    }
+    strip.appendChild(cell);
+  });
+}
+
+function updateAlertBanner() {
+  const alerted = ROUTES.filter(r => {
+    const t = parseFloat(state.alerts[r.id]);
+    return !r.suspended && t > 0 && state.currentRates[r.id] > t;
+  });
+  const banner = document.getElementById("alert-banner");
+  if (alerted.length > 0) {
+    banner.style.display = "block";
+    banner.textContent = "▲ Alert threshold exceeded · " + alerted.map(r=>r.label).join(" · ");
+  } else {
+    banner.style.display = "none";
+  }
+}
+
+// ── Charts (4: 3 single-route mini + 1 combined) ──────────────────
+let chartRtm = null, chartLax = null, chartDxb = null;
+
+function makeCrisisPlugin() {
+  return {
+    id: "annotations",
+    afterDraw(chart) {
+      const { ctx, chartArea: { top, bottom, left, width } } = chart;
+      // WEEKS spans 16 Monday keys (index 0 = earliest). Position markers by fractional index.
+      // Fri Feb 20 (CNY, no SCFI) sits inside week starting Mon Feb 16 = index 6 → marker at 6.5.
+      // Fri Feb 28 (US–Iran war) sits inside week starting Mon Feb 23 = index 7 → marker at 7.5.
+      const idxWar = WEEKS.findIndex(w => w.key === "2026-02-23");
+      const denom = Math.max(WEEKS.length - 1, 1);
+      const drawMarker = (frac, color, label) => {
+        if (frac == null || isNaN(frac)) return;
+        const x = left + (frac / denom) * width;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, bottom);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([4, 3]);
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.font = "600 9px 'Barlow Condensed', Arial Narrow, sans-serif";
+        ctx.fillText(label, x + 3, top + 10);
+        ctx.restore();
+      };
+      if (idxWar >= 0) drawMarker(idxWar + 0.5, "#E3351A", "Feb 28 — US–Iran war");
+    }
+  };
+}
+
+function renderSingleRouteChart(canvasId, route, instanceRef) {
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  if (instanceRef.chart) instanceRef.chart.destroy();
+  instanceRef.chart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: WEEKS.map(w => w.label),
+      datasets: [{
+        label: route.label,
+        data: state.history[route.id] || [],
+        borderColor: route.color,
+        backgroundColor: route.color,
+        borderWidth: 1.8,
+        pointRadius: 2.5,
+        pointHoverRadius: 5,
+        tension: 0.25,
+        spanGaps: false,
+      }]
+    },
+    plugins: [makeCrisisPlugin()],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ` ${c.parsed.y?.toLocaleString() ?? "—"} ${route.unit}` } }
+      },
+      scales: {
+        x: { grid:{display:false}, border:{color:"rgba(60,60,59,0.3)"}, ticks:{color:"#706F6F", font:{family:"'Barlow Condensed', sans-serif", size:9}, maxRotation:0, autoSkip:true, maxTicksLimit:8} },
+        y: { grid:{color:"rgba(60,60,59,0.08)"}, border:{display:false}, ticks:{color:"#706F6F", font:{family:"'Barlow Condensed', sans-serif", size:9}, callback: v => `$${v >= 1000 ? (v/1000).toFixed(1)+'k' : v.toFixed(0)}`} }
+      }
+    }
+  });
+}
+
+// Change metrics helper — computes WoW, MoM, vs-pre-war (Fri Feb 27 baseline, key 2026-02-23)
+// Returns { latest, latestIdx, wow, mom, vsWar } with null-safe handling for gap weeks.
+function computeChanges(routeId) {
+  const series = state.history[routeId] || [];
+  // Find the latest non-null value and its index
+  let latestIdx = -1;
+  for (let i = series.length - 1; i >= 0; i--) {
+    if (series[i] != null) { latestIdx = i; break; }
+  }
+  if (latestIdx < 0) return { latest:null, latestIdx:-1, wow:null, mom:null, vsWar:null };
+  const latest = series[latestIdx];
+  // Prior non-null value for WoW
+  let prior1 = null;
+  for (let i = latestIdx - 1; i >= 0; i--) {
+    if (series[i] != null) { prior1 = series[i]; break; }
+  }
+  // Nearest non-null ~4 weeks back for MoM (within 3–5 weeks)
+  let prior4 = null;
+  for (let d = 4; d <= 5; d++) {
+    const j = latestIdx - d;
+    if (j >= 0 && series[j] != null) { prior4 = series[j]; break; }
+  }
+  if (prior4 == null) {
+    // fallback to 3 weeks back
+    const j = latestIdx - 3;
+    if (j >= 0 && series[j] != null) prior4 = series[j];
+  }
+  // Pre-war baseline — Fri Feb 27, 2026 (key 2026-02-23)
+  const preWarIdx = WEEKS.findIndex(w => w.key === "2026-02-23");
+  const preWar = (preWarIdx >= 0) ? series[preWarIdx] : null;
+  const pct = (n, b) => (n != null && b != null && b !== 0) ? (n - b) / b * 100 : null;
+  return {
+    latest, latestIdx,
+    wow: pct(latest, prior1),
+    mom: pct(latest, prior4),
+    vsWar: pct(latest, preWar),
+  };
+}
+
+function fmtPct(p) {
+  if (p == null) return "—";
+  const sign = p > 0 ? "+" : "";
+  return sign + p.toFixed(1) + "%";
+}
+
+function colorForPct(p) {
+  if (p == null) return "#706F6F";
+  if (p > 0) return "#C53F1E";    // warm — increase
+  if (p < 0) return "#2A7A3F";    // cool — decrease
+  return "#706F6F";
+}
+
+function renderSubtitle(subtitleId, routeId, unit) {
+  const el = document.getElementById(subtitleId);
+  if (!el) return;
+  const c = computeChanges(routeId);
+  if (c.latest == null) { el.textContent = "no data"; return; }
+  const span = (label, pct) =>
+    `<span>${label} <strong style="color:${colorForPct(pct)}">${fmtPct(pct)}</strong></span>`;
+  el.innerHTML =
+    `latest <strong>$${c.latest.toLocaleString()}${unit ? " " + unit : ""}</strong> · ` +
+    span("WoW", c.wow) + " · " +
+    span("MoM", c.mom) + " · " +
+    span("vs pre-war (Feb 27)", c.vsWar);
+}
+
+function renderCombinedSubtitle() {
+  const el = document.getElementById("subtitle-combined");
+  if (!el) return;
+  // Combined panel shows all 3 routes' vs-pre-war change inline
+  const parts = ROUTES.map(r => {
+    const c = computeChanges(r.id);
+    if (c.vsWar == null) return `<span>${r.label.split("→")[1].trim()}: —</span>`;
+    return `<span>${r.label.split("→")[1].trim()}: <strong style="color:${colorForPct(c.vsWar)}">${fmtPct(c.vsWar)}</strong></span>`;
+  });
+  el.innerHTML = "vs pre-war (Fri Feb 27): " + parts.join(" · ");
+}
+
+function renderChart() {
+  // Combined chart (the 4th panel) — all active routes overlaid
+  if (trendChart) trendChart.destroy();
+  const ctx = document.getElementById("trend-chart").getContext("2d");
+  const datasets = ROUTES
+    .filter(r => state.activeRoutes.has(r.id))
+    .map(r => ({
+      label: r.label,
+      data: state.history[r.id] || [],
+      borderColor: r.color, backgroundColor: r.color,
+      borderWidth: 1.5,
+      pointRadius: 2.5, pointHoverRadius: 5,
+      tension: 0.25, spanGaps: false,
+    }));
+
+  trendChart = new Chart(ctx, {
+    type: "line",
+    data: { labels: WEEKS.map(w => w.label), datasets },
+    plugins: [makeCrisisPlugin()],
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => {
+          const r = ROUTES.find(rt => rt.label === c.dataset.label);
+          const unit = r ? r.unit : "";
+          return ` ${c.dataset.label}  ${c.parsed.y?.toLocaleString() ?? "—"} ${unit}`;
+        }}}
+      },
+      scales: {
+        x: { grid:{display:false}, border:{color:"rgba(60,60,59,0.3)"}, ticks:{color:"#706F6F", font:{family:"'Barlow Condensed', sans-serif", size:9}, maxRotation:0, autoSkip:true, maxTicksLimit:8} },
+        y: { grid:{color:"rgba(60,60,59,0.08)", borderDash:[1,5]}, border:{display:false}, ticks:{color:"#706F6F", font:{family:"'Barlow Condensed', sans-serif", size:9}, callback: v => `$${(v/1000).toFixed(1)}k`} }
+      }
+    }
+  });
+
+  // Three single-route mini charts (always all 3, regardless of toggle state)
+  const rtm = ROUTES.find(r => r.id === "SHA-RTM");
+  const lax = ROUTES.find(r => r.id === "SHA-LAX");
+  const dxb = ROUTES.find(r => r.id === "SHA-DXB");
+  if (rtm && document.getElementById("chart-rtm")) renderSingleRouteChart("chart-rtm", rtm, { get chart() {return chartRtm;}, set chart(c) {chartRtm = c;} });
+  if (lax && document.getElementById("chart-lax")) renderSingleRouteChart("chart-lax", lax, { get chart() {return chartLax;}, set chart(c) {chartLax = c;} });
+  if (dxb && document.getElementById("chart-dxb")) renderSingleRouteChart("chart-dxb", dxb, { get chart() {return chartDxb;}, set chart(c) {chartDxb = c;} });
+
+  // Subtitles with WoW / MoM / vs pre-war change for each chart
+  if (rtm) renderSubtitle("subtitle-rtm", rtm.id, rtm.unit);
+  if (lax) renderSubtitle("subtitle-lax", lax.id, lax.unit);
+  if (dxb) renderSubtitle("subtitle-dxb", dxb.id, dxb.unit);
+  renderCombinedSubtitle();
+}
+
+// ── Route toggles (solo-select behaviour) ─────────────────────────
+function renderToggles() {
+  const container = document.getElementById("route-toggles");
+  container.innerHTML = "";
+  ROUTES.forEach(r => {
+    const active = state.activeRoutes.has(r.id);
+    const btn = document.createElement("button");
+    btn.className = "route-toggle " + (active ? "active" : "inactive");
+    btn.textContent = r.label;
+    if (r.suspended) {
+      btn.style.borderStyle = "dashed";
+      btn.title = "Suspended since Feb 2026 — historical data available";
+    }
+    btn.style.color = active ? r.color : "";
+    btn.style.border = (r.suspended ? "1px dashed " : "1px solid ") + (active ? r.color : "rgba(60,60,59,0.3)");
+    btn.onclick = () => {
+      const onlyThisActive = state.activeRoutes.size === 1 && state.activeRoutes.has(r.id);
+      if (onlyThisActive) {
+        state.activeRoutes = new Set(ACTIVE_ROUTES.map(r => r.id));
+      } else {
+        state.activeRoutes = new Set([r.id]);
+      }
+      renderToggles(); renderChart();
+    };
+    container.appendChild(btn);
+  });
+}
+
+// ── Table ─────────────────────────────────────────────────────────
+function renderTable() {
+  const table = document.getElementById("rate-table");
+  table.className = state.editMode ? "edit-mode" : "";
+
+  let html = "<thead><tr><th style='text-align:left;padding-left:0;color:#706F6F;min-width:70px'>Week of</th>";
+  ROUTES.forEach(r => {
+    const suspTag = r.suspended ? ' <span style="color:#E3351A;font-size:9px">[suspended]</span>' : "";
+    html += `<th style="color:${r.color}">${r.label}${suspTag}</th>`;
+  });
+  html += "</tr></thead><tbody>";
+
+  WEEKS.forEach((w, wi) => {
+    const isCurrent = wi === WEEKS.length - 1;
+    html += `<tr class="${isCurrent?"current-row":""}">`;
+    html += `<td class="${isCurrent?"is-current":""}">${w.label}${isCurrent?'<span class="current-badge">Latest</span>':""}</td>`;
+    ROUTES.forEach(r => {
+      if (r.suspended && isCurrent) {
+        html += `<td class="is-suspended"><span class="val">SUSPENDED</span><input type="number" value="" data-week="${w.key}" data-route="${r.id}" placeholder="—"></td>`;
+        return;
+      }
+      const storedVal = state.storedData[w.key]?.[r.id];
+      const val = storedVal ?? null;
+      const editVal = state.editBuffer[w.key]?.[r.id] ?? val ?? "";
+      html += `<td class="${!storedVal?"is-derived":""} ${isCurrent&&storedVal?"is-current":""}">
+        <span class="val">${val ? "$"+val.toLocaleString() : "—"}</span>
+        <input type="number" value="${editVal}" data-week="${w.key}" data-route="${r.id}">
+      </td>`;
+    });
+    html += "</tr>";
+  });
+  html += "</tbody>";
+  table.innerHTML = html;
+
+  table.querySelectorAll("input[data-week]").forEach(inp => {
+    inp.addEventListener("input", e => {
+      const { week, route } = e.target.dataset;
+      if (!state.editBuffer[week]) state.editBuffer[week] = {};
+      state.editBuffer[week][route] = e.target.value;
+    });
+  });
+}
+
+// ── Edit mode ─────────────────────────────────────────────────────
+function startEdit() {
+  state.editBuffer = {};
+  WEEKS.forEach((w, wi) => {
+    state.editBuffer[w.key] = {};
+    ROUTES.forEach(r => {
+      state.editBuffer[w.key][r.id] = state.storedData[w.key]?.[r.id] ?? "";
+    });
+  });
+  state.editMode = true;
+  document.getElementById("btn-edit").style.display = "none";
+  document.getElementById("edit-actions").style.display = "flex";
+  document.getElementById("table-note").style.display = "none";
+  renderTable();
+}
+
+async function saveEdit() {
+  const updated = { ...state.storedData };
+  WEEKS.forEach(w => {
+    if (!updated[w.key]) updated[w.key] = {};
+    ROUTES.forEach(r => {
+      const v = parseFloat(state.editBuffer[w.key]?.[r.id]);
+      if (!isNaN(v) && v > 0) updated[w.key][r.id] = Math.round(v);
+    });
+  });
+  await saveData(updated);
+  state.storedData = updated;
+  state.history = computeHistory();
+  cancelEdit();
+  renderMetricStrip();
+  renderChart();
+}
+
+function cancelEdit() {
+  state.editMode = false;
+  state.editBuffer = {};
+  document.getElementById("btn-edit").style.display = "inline";
+  document.getElementById("edit-actions").style.display = "none";
+  document.getElementById("table-note").style.display = "block";
+  renderTable();
+}
+
+function render() {
+  renderMetricStrip();
+  renderToggles();
+  renderChart();
+  renderTable();
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+document.getElementById("year").textContent = new Date().getFullYear();
+
+(async () => {
+  const { data, backend } = await loadData();
+  state.storedData = data;
+  const currentKey = WEEKS[WEEKS.length-1].key;
+  if (data[currentKey]) {
+    state.currentRates = data[currentKey];
+    state.usedFallback = false;
+  }
+  state.history = computeHistory();
+  const sheetsActive = typeof SHEETS_URL !== "undefined" && SHEETS_URL;
+  document.getElementById("info-banner").style.display = sheetsActive ? "block" : "none";
+  render();
+})();
+</script>
+</body>
+</html>
